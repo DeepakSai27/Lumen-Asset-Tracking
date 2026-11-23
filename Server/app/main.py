@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import hashlib
+import hmac
 import io
 import logging
 import secrets
@@ -12,6 +14,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Response
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel, Field
@@ -76,6 +79,37 @@ class CheckpointPatch(BaseModel):
     location: str | None = Field(default=None, max_length=100)
 
 
+class LoginIn(BaseModel):
+    username: str = Field(max_length=100)
+    password: str = Field(max_length=200)
+    remember: bool = False
+
+
+SESSION_COOKIE = "lumen_session"
+REMEMBER_S = 7 * 86400      # "Remember me": stay signed in for a week
+SESSION_S = 12 * 3600       # otherwise: until the browser closes, at most 12 h
+LOGIN_MAX_FAILS = 5         # failed attempts per client IP ...
+LOGIN_WINDOW_S = 300        # ... within this many seconds before a lock-out
+
+
+def load_session_key(settings: Settings) -> bytes:
+    """Cookie-signing key: from settings, else generated once and stored beside the database."""
+    if settings.session_secret:
+        return settings.session_secret.encode()
+    path = Path(settings.db_path).parent / "session.key"
+    try:
+        return path.read_text().strip().encode()
+    except FileNotFoundError:
+        key = secrets.token_hex(32)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(key)
+        try:
+            path.chmod(0o600)
+        except OSError:
+            pass
+        return key.encode()
+
+
 def parse_day(value: str | None) -> date:
     if not value:
         return date.today()
@@ -116,14 +150,38 @@ def create_app(settings: Settings | None = None, run_background: bool = True) ->
     app.state.settings = settings
 
     basic = HTTPBasic(auto_error=False)
+    session_key = load_session_key(settings) if settings.admin_password else b""
+    login_fails: dict[str, list[float]] = {}
 
-    def require_admin(creds: HTTPBasicCredentials | None = Depends(basic)) -> None:
+    def _sign(user: str, exp: int) -> str:
+        # The password fingerprint is signed in, so changing the password signs everyone out.
+        pw_fp = hashlib.sha256(settings.admin_password.encode()).hexdigest()[:16]
+        return hmac.new(session_key, f"{user}|{exp}|{pw_fp}".encode(), hashlib.sha256).hexdigest()
+
+    def make_session(exp: int) -> str:
+        return f"{settings.admin_user}|{exp}|{_sign(settings.admin_user, exp)}"
+
+    def session_ok(token: str | None) -> bool:
+        try:
+            user, exp_s, sig = (token or "").rsplit("|", 2)
+            exp = int(exp_s)
+        except ValueError:
+            return False
+        return (user == settings.admin_user and exp > time.time()
+                and hmac.compare_digest(sig, _sign(user, exp)))
+
+    def is_authed(request: Request, creds: HTTPBasicCredentials | None) -> bool:
         if not settings.admin_password:
-            return
-        if creds is None or not secrets.compare_digest(
-                creds.password.encode(), settings.admin_password.encode()):
-            raise HTTPException(401, "authentication required",
-                                headers={"WWW-Authenticate": 'Basic realm="Lumen"'})
+            return True
+        if session_ok(request.cookies.get(SESSION_COOKIE)):
+            return True
+        # HTTP Basic still works for scripts (no browser pop-up: no WWW-Authenticate header).
+        return creds is not None and secrets.compare_digest(
+            creds.password.encode(), settings.admin_password.encode())
+
+    def require_admin(request: Request, creds: HTTPBasicCredentials | None = Depends(basic)) -> None:
+        if not is_authed(request, creds):
+            raise HTTPException(401, "authentication required")
 
     def require_checkpoint(authorization: str = Header(default="")) -> None:
         expected = f"Bearer {settings.api_token}"
@@ -141,12 +199,51 @@ def create_app(settings: Settings | None = None, run_background: bool = True) ->
     def health():
         return {"ok": True, "time": time.time()}
 
+    # ------------------------------------------------------------- login
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(STATIC / "index.html")     # the page itself shows the login screen
+
+    @app.get("/api/me")
+    def me(request: Request, creds: HTTPBasicCredentials | None = Depends(basic)):
+        if not settings.admin_password:
+            return {"auth": False, "user": None}
+        if not is_authed(request, creds):
+            raise HTTPException(401, "authentication required")
+        return {"auth": True, "user": settings.admin_user}
+
+    @app.post("/api/login")
+    def login(body: LoginIn, request: Request, response: Response):
+        if not settings.admin_password:
+            return {"auth": False, "user": None}
+        ip = request.client.host if request.client else "?"
+        now = time.time()
+        recent = [t for t in login_fails.get(ip, []) if now - t < LOGIN_WINDOW_S]
+        if len(recent) >= LOGIN_MAX_FAILS:
+            wait = int(LOGIN_WINDOW_S - (now - recent[0])) + 1
+            raise HTTPException(429, f"Too many attempts. Try again in {max(1, wait // 60)} min.")
+        user_ok = secrets.compare_digest(body.username.strip().lower().encode(), settings.admin_user.lower().encode())
+        pw_ok = secrets.compare_digest(body.password.encode(), settings.admin_password.encode())
+        if not (user_ok and pw_ok):
+            recent.append(now)
+            login_fails[ip] = recent
+            log.warning("failed login from %s", ip)
+            time.sleep(0.5)                              # slow down guessing
+            raise HTTPException(401, "Incorrect username or password")
+        login_fails.pop(ip, None)
+        ttl = REMEMBER_S if body.remember else SESSION_S
+        response.set_cookie(SESSION_COOKIE, make_session(int(now + ttl)), max_age=ttl if body.remember else None,
+                            httponly=True, samesite="lax", path="/")
+        log.info("login from %s", ip)
+        return {"auth": True, "user": settings.admin_user}
+
+    @app.post("/api/logout")
+    def logout(response: Response):
+        response.delete_cookie(SESSION_COOKIE, path="/")
+        return {"ok": True}
+
     # ------------------------------------------------------------- website/API
     ui = APIRouter(dependencies=[Depends(require_admin)])
-
-    @ui.get("/", include_in_schema=False)
-    def index():
-        return FileResponse(STATIC / "index.html")
 
     @ui.get("/api/presence")
     def presence():

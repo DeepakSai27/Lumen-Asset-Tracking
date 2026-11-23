@@ -148,6 +148,54 @@ def test_admin_password(tmp_path):
     with TestClient(app) as c:
         assert c.get("/api/presence").status_code == 401
         assert c.get("/api/presence", auth=("admin", "pw")).status_code == 200
+        assert c.get("/").status_code == 200          # page loads so it can show the login screen
+
+
+def test_login_session(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "l.db", admin_user="admin", admin_password="pw"), run_background=False)
+    with TestClient(app) as c:
+        assert c.get("/api/me").status_code == 401
+        assert c.post("/api/login", json={"username": "admin", "password": "nope"}).status_code == 401
+        assert c.post("/api/login", json={"username": "other", "password": "pw"}).status_code == 401
+        r = c.post("/api/login", json={"username": "Admin", "password": "pw", "remember": True})
+        assert r.status_code == 200 and r.json() == {"auth": True, "user": "admin"}
+        assert "lumen_session" in r.cookies and "httponly" in r.headers["set-cookie"].lower()
+        assert c.get("/api/me").json()["user"] == "admin"
+        assert c.get("/api/presence").status_code == 200
+        tok = r.cookies["lumen_session"]
+        c.cookies.clear()
+        c.cookies.set("lumen_session", tok.replace("|", "|9", 1))      # tampered expiry
+        assert c.get("/api/presence").status_code == 401
+        c.cookies.clear()
+        c.cookies.set("lumen_session", tok)
+        c.post("/api/logout")
+        c.cookies.clear()
+        assert c.get("/api/presence").status_code == 401
+        assert c.post("/api/checkpoint/report", json={"checkpoint": CP1}).status_code == 401  # still token-only
+    # Sessions survive a restart (key kept beside the DB) but not a password change.
+    app2 = create_app(Settings(db_path=tmp_path / "l.db", admin_password="pw"), run_background=False)
+    with TestClient(app2) as c:
+        c.cookies.set("lumen_session", tok)
+        assert c.get("/api/me").status_code == 200
+    app3 = create_app(Settings(db_path=tmp_path / "l.db", admin_password="new"), run_background=False)
+    with TestClient(app3) as c:
+        c.cookies.set("lumen_session", tok)
+        assert c.get("/api/me").status_code == 401
+
+
+def test_login_lockout(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "k.db", admin_password="pw"), run_background=False)
+    with TestClient(app) as c:
+        for _ in range(5):
+            assert c.post("/api/login", json={"username": "admin", "password": "x"}).status_code == 401
+        assert c.post("/api/login", json={"username": "admin", "password": "pw"}).status_code == 429
+
+
+def test_no_password_means_open(tmp_path):
+    app = create_app(Settings(db_path=tmp_path / "o.db"), run_background=False)
+    with TestClient(app) as c:
+        assert c.get("/api/me").json() == {"auth": False, "user": None}
+        assert c.get("/api/presence").status_code == 200
 
 
 def test_movement(engine):
