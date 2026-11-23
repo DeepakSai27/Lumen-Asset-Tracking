@@ -56,6 +56,13 @@ void wifi_start(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    /* Maximum Wi-Fi transmit power (units of 0.25 dBm: 80 = 20 dBm). */
+    esp_err_t perr = esp_wifi_set_max_tx_power(80);
+    int8_t pwr = 0;
+    esp_wifi_get_max_tx_power(&pwr);
+    ESP_LOGI(TAG, "Wi-Fi TX power %s, now %d.%02d dBm", perr == ESP_OK ? "set to max" : "not changed",
+             pwr / 4, (pwr % 4) * 25);
     ESP_LOGI(TAG, "connecting to \"%s\"", CONFIG_LUMEN_WIFI_SSID);
 }
 

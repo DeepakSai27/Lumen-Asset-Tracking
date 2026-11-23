@@ -20,3 +20,7 @@ CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
 # Restart instead of hanging if something goes badly wrong
 CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
 CONFIG_ESP_TASK_WDT_PANIC=y
+
+# Radio power: maximum on both BLE (+20 dBm) and Wi-Fi (20 dBm)
+CONFIG_BT_LE_DFT_TX_POWER_LEVEL_P20=y
+CONFIG_ESP_PHY_MAX_WIFI_TX_POWER=20
