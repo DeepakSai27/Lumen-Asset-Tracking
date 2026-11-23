@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumen Asset Tracking</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --panel: #ffffff; --text: #1f2a44; --muted: #6b7280; --line: #e5e7eb;
+    --brand: #1f4fb4; --brand-2: #2b63d6; --brand-ink: #1e3a8a;
+    --head-bg: #e3f0fb; --head-line: #8cc4ec; --accent: #2b8fd6;
+    --green: #16a34a; --green-2: #22c55e; --orange: #f59e0b; --orange-2: #f97316;
+    --ok: #15803d; --ok-bg: #dcfce7; --off: #6b7280; --off-bg: #eef0f3; --danger: #dc2626;
+    --cell-line: #e6e9ef; --cell-on: #3aa6e0; --cell-on-2: #7cc6ef;
+    --row-alt: #f9fafb; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141b; --panel: #181e28; --text: #e5e9f0; --muted: #9aa4b5; --line: #2a3240;
+      --brand: #17346f; --brand-2: #1f4596; --brand-ink: #9cc3ff;
+      --head-bg: #1b2a3d; --head-line: #2f5f8c; --accent: #5ab4f0;
+      --ok: #4ade80; --ok-bg: #14321f; --off: #9aa4b5; --off-bg: #242b37;
+      --cell-line: #263040; --cell-on: #3aa6e0; --cell-on-2: #1f6e9c; --row-alt: #1c2330;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  .ic { width: 20px; height: 20px; fill: currentColor; flex: none; }
+
+  /* ---------- layout ---------- */
+  .app { display: flex; min-height: 100vh; }
+  aside { width: 250px; flex: none; background: linear-gradient(180deg, var(--brand-2), var(--brand));
+          color: #fff; border-radius: 0 22px 22px 0; padding: 14px 12px; position: sticky; top: 0;
+          height: 100vh; overflow-y: auto; transition: margin-left .2s; z-index: 20; }
+  aside .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 18px; }
+  aside .brand b { font-size: 16px; letter-spacing: .01em; }
+  aside .brand small { display: block; opacity: .7; font-size: 11px; }
+  .burger { background: none; border: 0; color: inherit; cursor: pointer; padding: 4px; border-radius: 6px; }
+  .nav a, .nav .group { display: flex; align-items: center; gap: 12px; padding: 11px 12px; margin: 3px 0;
+          color: #fff; text-decoration: none; border-radius: 10px; cursor: pointer; font-weight: 600;
+          user-select: none; white-space: nowrap; }
+  .nav a:hover, .nav .group:hover { background: rgba(255,255,255,.1); }
+  .nav a.active { background: #fff; color: var(--brand); }
+  .nav .group .chev { margin-left: auto; transition: transform .2s; }
+  .nav .group.open .chev { transform: rotate(90deg); }
+  .nav .sub { display: none; padding-left: 26px; }
+  .nav .group.open + .sub { display: block; }
+  .nav .sub a { font-weight: 500; font-size: 13px; padding: 8px 12px; }
+  .nav .sub a::before { content: "•"; margin-right: 6px; }
+  .nav .sub a.active { background: rgba(255,255,255,.95); }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { display: flex; align-items: center; gap: 12px; padding: 18px 28px 6px; }
+  .topbar .crumb { color: var(--muted); font-size: 15px; }
+  .topbar .crumb b { color: var(--text); font-weight: 500; }
+  .topbar .spacer { flex: 1; }
+  .topbar .mobile-burger { display: none; color: var(--text); }
+  #content { padding: 12px 28px 40px; max-width: 1500px; width: 100%; }
+  @media (max-width: 900px) {
+    aside { position: fixed; left: 0; top: 0; margin-left: -260px; }
+    body.nav-open aside { margin-left: 0; box-shadow: 0 0 40px rgba(0,0,0,.3); }
+    .topbar .mobile-burger { display: inline-flex; }
+    #content { padding: 12px 16px 40px; }
+    .topbar { padding: 14px 16px 4px; }
+  }
+
+  /* ---------- cards ---------- */
+  .card { background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); margin-bottom: 18px;
+          border: 1px solid var(--line); overflow: hidden; }
+  .card-h { display: flex; align-items: center; gap: 10px; background: var(--head-bg);
+            border-bottom: 2px solid var(--head-line); padding: 12px 18px; font-weight: 600;
+            color: var(--brand-ink); }
+  .card-h .ic { color: var(--brand-ink); }
+  .card-h .right { margin-left: auto; display: flex; gap: 8px; align-items: center; font-weight: 400; }
+  .card-b { padding: 16px 18px; }
+  .grid2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; }
+  .grid2 > .card { margin-bottom: 0; }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } }
+  .stack > * + * { margin-top: 18px; }
+
+  .kv { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .kv:last-child { border-bottom: 0; }
+  .kv span { color: var(--muted); }
+  .kv b { color: var(--brand-ink); font-weight: 500; text-align: right; word-break: break-all; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .loc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+              border: 1.5px solid var(--accent); background: var(--head-bg); color: var(--brand-ink); font-weight: 500; }
+  .loc-chip small { color: var(--muted); font-weight: 400; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; flex: none; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+  .tile { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px solid var(--line);
+          border-radius: 12px; background: var(--row-alt); }
+  .tile .badge { width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex: none; }
+  .tile .badge .ic { width: 24px; height: 24px; }
+  .b-blue { background: linear-gradient(135deg, #3aa6e0, #1f78c8); }
+  .b-green { background: linear-gradient(135deg, var(--green-2), var(--green)); }
+  .b-orange { background: linear-gradient(135deg, var(--orange), var(--orange-2)); }
+  .b-slate { background: linear-gradient(135deg, #64748b, #475569); }
+  .tile .lbl { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .tile .val { font-size: 24px; font-weight: 700; color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+
+  /* ---------- controls ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  .toolbar .spacer { flex: 1; }
+  label.f { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-weight: 500; }
+  input, select { font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+                  background: var(--panel); color: var(--text); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; font: inherit; font-weight: 600; padding: 8px 14px;
+         border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
+  .btn .ic { width: 18px; height: 18px; }
+  .btn.green { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.blue { background: var(--brand-2); border-color: var(--brand-2); color: #fff; }
+  .btn.sm { padding: 5px 10px; font-weight: 500; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--panel); color: var(--text); padding: 7px 12px; font: inherit; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button.on { background: var(--head-bg); color: var(--brand-ink); font-weight: 600; }
+  .link { background: none; border: 0; color: var(--brand-2); cursor: pointer; padding: 0 4px; font: inherit; }
+  .link.danger { color: var(--danger); }
+
+  /* ---------- tables ---------- */
+  .tbl-wrap { overflow: auto; }
+  .tbl-wrap.tall { max-height: 560px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--brand-ink); font-weight: 600; background: var(--head-bg); position: sticky; top: 0; z-index: 1; }
+  tbody tr:nth-child(even) td { background: var(--row-alt); }
+  tr.click { cursor: pointer; } tr.click:hover td { background: var(--head-bg); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 12.5px; color: var(--muted); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.in { background: var(--ok-bg); color: var(--ok); }
+  .pill.out { background: var(--off-bg); color: var(--off); }
+  .muted { color: var(--muted); }
+  .note { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .empty { padding: 28px; text-align: center; color: var(--muted); }
+
+  /* ---------- timeline graph ---------- */
+  .tl { overflow-x: auto; border-radius: 16px; }
+  .tl-grid { display: grid; min-width: 100%; }
+  .tl-c { border-bottom: 1px solid var(--line); }
+  .tl-day, .tl-rem, .tl-corner, .tl-remh { position: sticky; z-index: 3; background: var(--panel); }
+  .tl-day, .tl-corner { left: 0; border-right: 1px solid var(--line); }
+  .tl-rem, .tl-remh { right: 0; border-left: 1px solid var(--line); }
+  .tl-corner, .tl-remh { background: var(--head-bg); color: var(--brand-ink); font-weight: 600;
+            display: flex; align-items: center; padding: 0 16px; height: 64px;
+            border-bottom: 2px solid var(--head-line); font-size: 13px; }
+  .tl-remh { justify-content: center; }
+  .tl-head { position: relative; height: 64px; background: var(--head-bg); border-bottom: 2px solid var(--head-line); }
+  .tl-head .hr { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--head-line); }
+  .tl-head .hr span { position: absolute; top: 19px; transform: translateX(-50%); background: var(--panel);
+            border: 1px solid var(--head-line); border-radius: 6px; padding: 3px 8px; font-size: 12px;
+            color: var(--brand-ink); font-variant-numeric: tabular-nums; }
+  .tl-day { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; height: 38px; }
+  .tl-day b { color: var(--brand-ink); font-weight: 600; }
+  .tl-day small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tl-day.we b { color: var(--muted); }
+  .tl-row { position: relative; height: 38px; }
+  .tl-run { position: absolute; top: 3px; bottom: 3px; border-radius: 2px; cursor: default;
+            background: repeating-linear-gradient(135deg, var(--cell-on) 0 3px, var(--cell-on-2) 3px 5px);
+            box-shadow: inset 0 0 0 1px var(--cell-on); }
+  .tl-run.open { box-shadow: inset 0 0 0 1px var(--green); }
+  .tl-rem { display: flex; align-items: center; justify-content: center; height: 38px; font-weight: 600;
+            color: var(--brand-ink); font-variant-numeric: tabular-nums; padding: 0 12px; }
+  .tl-rem.abs { color: var(--muted); font-weight: 400; }
+  .tl-now { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--danger); z-index: 2; border-radius: 1px; }
+  .tl-now::before { content: ""; position: absolute; top: 0; left: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+  .legend { display: flex; gap: 16px; align-items: center; color: var(--muted); font-size: 12.5px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 18px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; }
+  .legend .l-on { background: repeating-linear-gradient(135deg, var(--cell-on) 0 3px, var(--cell-on-2) 3px 5px); }
+  .legend .l-open { background: repeating-linear-gradient(135deg, var(--cell-on) 0 3px, var(--cell-on-2) 3px 5px); box-shadow: inset 0 0 0 1.5px var(--green); }
+  .legend .l-now { width: 2px; background: var(--danger); }
+  .mini { position: relative; height: 14px; min-width: 220px; background: var(--off-bg); border-radius: 4px; overflow: hidden; }
+  .mini i { position: absolute; top: 0; bottom: 0; background: var(--cell-on); }
+  .mini b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--danger); }
+  .today { display: flex; align-items: center; gap: 12px; }
+  .today .d { min-width: 58px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  @media (max-width: 700px) {
+    .tl-day { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 10px; line-height: 1.15; }
+    .tl-corner, .tl-remh { padding: 0 10px; font-size: 12px; }
+    .tiles { grid-template-columns: 1fr; }
+    .tile { padding: 14px; }
+  }
+
+  .bar { height: 8px; background: var(--off-bg); border-radius: 4px; min-width: 140px; position: relative; }
+  .bar i { position: absolute; top: 0; bottom: 0; background: var(--accent); border-radius: 2px; }
+
+  #toast { position: fixed; bottom: 18px; right: 18px; background: var(--text); color: var(--bg);
+           padding: 10px 14px; border-radius: 8px; display: none; max-width: 90vw; z-index: 50; }
+  details summary { cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <button class="burger" id="burger" title="Menu"></button>
+      <div><b>Lumen</b><small>Asset Tracking</small></div>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <button class="burger mobile-burger" id="burger2" title="Menu"></button>
+      <div class="crumb" id="crumb"></div>
+      <div class="spacer"></div>
+      <span class="muted" id="clock"></span>
+    </div>
+    <div id="content"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+// ===================================================================== helpers
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const P = (d) => `<path d="${d}"/>`;
+const ICON = {
+  menu: P("M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"),
+  dash: P("M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"),
+  users: P("M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"),
+  device: P("M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"),
+  report: P("M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"),
+  user: P("M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"),
+  pin: P("M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"),
+  clock: P("M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"),
+  trend: P("M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"),
+  cal: P("M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11zM7 11h5v5H7z"),
+  grid: P("M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"),
+  table: P("M10 10.02h5V21h-5zM17 21h3c1.1 0 2-.9 2-2v-9h-5v11zm3-18H5c-1.1 0-2 .9-2 2v3h19V5c0-1.1-.9-2-2-2zM3 19c0 1.1.9 2 2 2h3V10H3v9z"),
+  list: P("M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"),
+  chev: P("M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"),
+  link: P("M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"),
+  route: P("M19 15.18V7c0-2.21-1.79-4-4-4s-4 1.79-4 4v10c0 1.1-.9 2-2 2s-2-.9-2-2V8.82C8.16 8.4 9 7.3 9 6c0-1.66-1.34-3-3-3S3 4.34 3 6c0 1.3.84 2.4 2 2.82V17c0 2.21 1.79 4 4 4s4-1.79 4-4V7c0-1.1.9-2 2-2s2 .9 2 2v8.18c-1.16.41-2 1.51-2 2.82 0 1.66 1.34 3 3 3s3-1.34 3-3c0-1.3-.84-2.4-2-2.82z"),
+  download: P("M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"),
+  refresh: P("M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"),
+  radar: P("M12 11c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm6 2c0-3.31-2.69-6-6-6s-6 2.69-6 6c0 2.22 1.21 4.15 3 5.19l1-1.74c-1.19-.7-2-1.97-2-3.45 0-2.21 1.79-4 4-4s4 1.79 4 4c0 1.48-.81 2.75-2 3.45l1 1.74c1.79-1.04 3-2.97 3-5.19zM12 3C6.48 3 2 7.48 2 13c0 3.7 2.01 6.92 4.99 8.65l1-1.73C5.61 18.53 4 15.96 4 13c0-4.42 3.58-8 8-8s8 3.58 8 8c0 2.96-1.61 5.53-4 6.92l1 1.73c2.99-1.73 5-4.95 5-8.65 0-5.52-4.48-10-10-10z"),
+};
+const ic = (n, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+
+const two = (n) => String(n).padStart(2, "0");
+const isoDay = (d) => `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+const dayStart = (iso) => new Date(iso + "T00:00").getTime() / 1000;
+const fmtHM = (ts) => { if (!ts) return "–"; const d = new Date(ts * 1000); return `${two(d.getHours())}:${two(d.getMinutes())}`; };
+const fmtDT = (ts) => { if (!ts) return "–"; const d = new Date(ts * 1000);
+  return `${two(d.getDate())}/${two(d.getMonth() + 1)}/${d.getFullYear()} ${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`; };
+const fmtDMY = (iso) => { const [y, m, d] = iso.split("-"); return `${d}/${m}/${y}`; };
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+  return h ? `${h}h ${two(m)}m` : `${m}m`;
+}
+function ago(ts) {
+  if (!ts) return "never";
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  return fmtDT(ts);
+}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 3500); }
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {headers: {"Content-Type": "application/json"}, ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined});
+  if (!res.ok) {
+    let msg = res.statusText;
+    try { const j = await res.json(); msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail); } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+const card = (icon, title, body, right = "") =>
+  `<div class="card"><div class="card-h">${ic(icon)}<span>${title}</span>${right ? `<div class="right">${right}</div>` : ""}</div>${body}</div>`;
+const tile = (badge, icon, label, value) =>
+  `<div class="tile"><div class="badge ${badge}">${ic(icon)}</div><div><div class="lbl">${label}</div><div class="val">${value}</div></div></div>`;
+
+// ===================================================================== navigation
+const NAV = [
+  {id: "dashboard", label: "Dashboard", icon: "dash"},
+  {id: "users", label: "Users", icon: "users"},
+  {group: "Device Management", icon: "device", items: [
+    {id: "locations", label: "Locations"},
+    {id: "mapping", label: "Device Mapping"},
+    {id: "movement", label: "User Movement"},
+  ]},
+  {id: "attendance", label: "Attendance", icon: "report"},
+];
+const CRUMB = {dashboard: "Dashboard", users: "Users", locations: "Device Management > <b>Locations</b>",
+  mapping: "Device Management > <b>Device Mapping</b>", movement: "Device Management > <b>User Movement Details</b>",
+  attendance: "Attendance"};
+
+function renderNav(active) {
+  $("nav").innerHTML = NAV.map(n => n.group
+    ? `<div class="group ${n.items.some(i => i.id === active) ? "open" : ""}">${ic(n.icon)}<span>${n.group}</span>${ic("chev", "chev")}</div>
+       <div class="sub">${n.items.map(i => `<a href="#/${i.id}" class="${i.id === active ? "active" : ""}">${i.label}</a>`).join("")}</div>`
+    : `<a href="#/${n.id}" class="${n.id === active ? "active" : ""}">${ic(n.icon)}<span>${n.label}</span></a>`).join("");
+  document.querySelectorAll("#nav .group").forEach(g => g.onclick = () => g.classList.toggle("open"));
+  $("crumb").innerHTML = CRUMB[active] || "";
+}
+["burger", "burger2"].forEach(id => { $(id).innerHTML = ic("menu"); $(id).onclick = () => document.body.classList.toggle("nav-open"); });
+
+function route() {
+  const [path, qs] = location.hash.replace(/^#\/?/, "").split("?");
+  return {page: path || "dashboard", q: new URLSearchParams(qs || "")};
+}
+const go = (page, params) => { location.hash = `#/${page}${params ? "?" + new URLSearchParams(params) : ""}`; };
+
+let timer = null;
+async function render() {
+  clearInterval(timer); timer = null;
+  const {page, q} = route();
+  renderNav(page);
+  document.body.classList.remove("nav-open");
+  const fn = PAGES[page] || PAGES.dashboard;
+  try { await fn(q); } catch (e) { $("content").innerHTML = `<div class="card"><div class="empty">Error: ${esc(e.message)}</div></div>`; }
+}
+window.addEventListener("hashchange", render);
+setInterval(() => $("clock").textContent = new Date().toLocaleString([], {weekday: "short", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit"}), 1000);
+
+// ===================================================================== pages
+const PAGES = {};
+
+// ---------------------------------------------------------------- dashboard
+PAGES.dashboard = async () => {
+  $("content").innerHTML = `<div class="tiles" id="d-tiles" style="margin-bottom:18px"></div><div id="d-table"></div>`;
+  const load = async () => {
+    const [p, cps] = await Promise.all([api("/api/presence"), api("/api/checkpoints")]);
+    const people = p.people.sort((a, b) => (b.present - a.present) || a.name.localeCompare(b.name));
+    const inN = people.filter(x => x.present).length;
+    $("d-tiles").innerHTML =
+      tile("b-green", "users", "Present now", `${inN} / ${people.length}`) +
+      tile("b-slate", "user", "Away", people.length - inN) +
+      tile("b-blue", "radar", "Checkpoints online", `${cps.filter(c => c.online).length} / ${cps.length}`) +
+      tile("b-orange", "clock", "Last update", new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"}));
+    $("d-table").innerHTML = card("list", "Live Presence", `<div class="tbl-wrap"><table>
+      <thead><tr><th>Name</th><th>Department</th><th>Status</th><th>Location</th><th>In since</th><th>Today (07:00–19:00)</th><th>Last seen</th></tr></thead>
+      <tbody>${people.map(x => `<tr class="click" data-id="${x.employee_id}">
+        <td><b>${esc(x.name)}</b>${x.tag_count ? "" : ' <span class="muted">(no device)</span>'}</td>
+        <td class="muted">${esc(x.department)}</td>
+        <td>${x.present ? '<span class="pill in">Present</span>' : '<span class="pill out">Away</span>'}</td>
+        <td>${x.present ? `<span class="dot"></span> ${esc(x.location)}` : ""}</td>
+        <td class="num">${x.present ? fmtHM(x.since) : ""}</td>
+        <td><div class="today"><span class="d">${fmtDur(x.today_seconds)}</span>${miniBar(x.today_sessions)}</div></td>
+        <td class="muted">${x.present ? "now" : ago(x.last_seen)}</td></tr>`).join("")
+      || '<tr><td colspan="7" class="empty">No users yet. Add some under Users.</td></tr>'}</tbody></table></div>`);
+    document.querySelectorAll("#d-table tr.click").forEach(tr => tr.onclick = () => go("movement", {user: tr.dataset.id}));
+  };
+  await load();
+  timer = setInterval(() => !document.hidden && load().catch(() => {}), 5000);
+};
+
+function miniBar(sessions) {
+  // Today's presence on a 07:00-19:00 strip (widened if needed), with a "now" marker.
+  const base = dayStart(isoDay(new Date()));
+  let h0 = 7, h1 = 19;
+  for (const [a, b] of sessions || []) { h0 = Math.min(h0, Math.floor((a - base) / 3600)); h1 = Math.max(h1, Math.ceil((b - base) / 3600)); }
+  h0 = Math.max(0, h0); h1 = Math.min(24, h1);
+  const t0 = base + h0 * 3600, span = (h1 - h0) * 3600, pct = (t) => Math.min(100, Math.max(0, (t - t0) / span * 100));
+  const runs = (sessions || []).map(([a, b]) => `<i style="left:${pct(a)}%;width:${Math.max(0.6, pct(b) - pct(a))}%" title="${fmtHM(a)}–${fmtHM(b)}"></i>`).join("");
+  const now = Date.now() / 1000;
+  const marker = now > t0 && now < t0 + span ? `<b style="left:${pct(now)}%" title="now"></b>` : "";
+  return `<div class="mini" title="${two(h0)}:00 – ${two(h1)}:00">${runs}${marker}</div>`;
+}
+
+// ---------------------------------------------------------------- users
+PAGES.users = async () => {
+  const emps = await api("/api/employees");
+  $("content").innerHTML = `<div class="stack">
+    ${card("user", "Add User", `<div class="card-b"><div class="toolbar" style="margin:0">
+      <input id="u-name" placeholder="Name" size="22"><input id="u-email" placeholder="Email" size="28">
+      <input id="u-dept" placeholder="Department" size="18">
+      <button class="btn blue" id="u-add">Add user</button></div></div>`)}
+    ${card("users", `Users (${emps.length})`, `<div class="tbl-wrap"><table>
+      <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Device MAC</th><th></th></tr></thead>
+      <tbody>${emps.map(e => `<tr>
+        <td><b>${esc(e.name)}</b></td><td>${esc(e.email)}</td><td class="muted">${esc(e.department)}</td>
+        <td class="mono">${e.tags.map(t => esc(t.mac || `iB ${t.ib_major}/${t.ib_minor}`)).join("<br>") || '<span class="muted">not mapped</span>'}</td>
+        <td><button class="link" data-mv="${e.id}">Movement</button>
+            <button class="link" data-ed="${e.id}">Edit</button>
+            <button class="link danger" data-rm="${e.id}">Remove</button></td></tr>`).join("")
+      || '<tr><td colspan="5" class="empty">No users yet.</td></tr>'}</tbody></table></div>`)}</div>`;
+  $("u-add").onclick = async () => {
+    const name = $("u-name").value.trim(); if (!name) return toast("Enter a name");
+    try { await api("/api/employees", {method: "POST", body: {name, email: $("u-email").value, department: $("u-dept").value}}); toast("User added"); render(); }
+    catch (e) { toast(e.message); }
+  };
+  document.querySelectorAll("[data-mv]").forEach(b => b.onclick = () => go("movement", {user: b.dataset.mv}));
+  document.querySelectorAll("[data-ed]").forEach(b => b.onclick = async () => {
+    const e = emps.find(x => x.id == b.dataset.ed);
+    const name = prompt("Name", e.name); if (name === null) return;
+    const email = prompt("Email", e.email); if (email === null) return;
+    const department = prompt("Department", e.department); if (department === null) return;
+    try { await api(`/api/employees/${e.id}`, {method: "PATCH", body: {name, email, department}}); render(); } catch (err) { toast(err.message); }
+  });
+  document.querySelectorAll("[data-rm]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this user? Their attendance history is kept and their device is unmapped.")) return;
+    await api(`/api/employees/${b.dataset.rm}`, {method: "DELETE"}); render();
+  });
+};
+
+// ---------------------------------------------------------------- locations
+PAGES.locations = async () => {
+  const cps = await api("/api/checkpoints");
+  $("content").innerHTML = card("pin", `Locations (${cps.length})`, `<div class="card-b" style="padding-bottom:0">
+    <p class="note">Each ESP32-C5 checkpoint registers itself on its first report. Give it a name and location. The location is what users see as "Locations Visited".</p></div>
+    <div class="tbl-wrap"><table>
+    <thead><tr><th>Status</th><th>Location MAC</th><th>Name</th><th>Location</th><th>Firmware</th><th>IP</th><th>Last report</th><th></th></tr></thead>
+    <tbody>${cps.map(c => `<tr>
+      <td>${c.online ? '<span class="pill in">Online</span>' : '<span class="pill out">Offline</span>'}</td>
+      <td class="mono">${esc(c.id)}</td>
+      <td><input value="${esc(c.name)}" data-id="${esc(c.id)}" data-f="name" size="16"></td>
+      <td><input value="${esc(c.location)}" data-id="${esc(c.id)}" data-f="location" size="20" placeholder="e.g. Lumen Office"></td>
+      <td class="muted">${esc(c.fw)}</td><td class="mono">${esc(c.ip)}</td>
+      <td class="muted">${ago(c.last_report_ts)}</td>
+      <td><button class="link danger" data-del="${esc(c.id)}">Remove</button></td></tr>`).join("")
+    || '<tr><td colspan="8" class="empty">No checkpoint has reported yet.</td></tr>'}</tbody></table></div>`);
+  document.querySelectorAll("#content input[data-f]").forEach(i => i.onchange = async () => {
+    await api(`/api/checkpoints/${encodeURIComponent(i.dataset.id)}`, {method: "PATCH", body: {[i.dataset.f]: i.value}}); toast("Saved");
+  });
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this checkpoint? It re-appears if it reports again.")) return;
+    await api(`/api/checkpoints/${encodeURIComponent(b.dataset.del)}`, {method: "DELETE"}); render();
+  });
+};
+
+// ---------------------------------------------------------------- device mapping
+PAGES.mapping = async () => {
+  const [emps, tags] = await Promise.all([api("/api/employees"), api("/api/tags")]);
+  const opts = (sel) => `<option value="">– not mapped –</option>` + emps.map(e => `<option value="${e.id}" ${e.id == sel ? "selected" : ""}>${esc(e.name)}</option>`).join("");
+  $("content").innerHTML = `<div class="stack">
+    ${card("radar", "Map a New Device", `<div class="card-b">
+      <p class="note">Click <b>Scan for new devices</b>, then hold the tag next to a checkpoint. The tag closest to it appears at the top. Choose a user to map it. Scanning stops after 10 minutes.</p>
+      <div class="toolbar"><button class="btn blue" id="disc-btn">${ic("radar")}<span>Scan for new devices</span></button><span id="disc-state" class="muted"></span></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Device MAC</th><th>iBeacon</th><th>RSSI</th><th>Heard by</th><th>Seen</th><th>Map to user</th></tr></thead>
+      <tbody id="disc-body"></tbody></table></div>
+      <details style="margin-top:14px"><summary class="muted">Add a device manually</summary>
+        <div class="toolbar" style="margin-top:10px">
+          <select id="man-emp">${opts()}</select>
+          <input id="man-mac" class="mono" placeholder="MAC  AA:BB:CC:DD:EE:FF" size="22">
+          <span class="muted">or iBeacon</span>
+          <input id="man-uuid" class="mono" placeholder="UUID" size="36">
+          <input id="man-major" placeholder="major" size="6"><input id="man-minor" placeholder="minor" size="6">
+          <button class="btn" id="man-add">Add device</button></div></details></div>`)}
+    ${card("link", `Device Mapping (${tags.length})`, `<div class="tbl-wrap"><table>
+      <thead><tr><th>Device MAC</th><th>iBeacon</th><th>Label</th><th>User</th><th></th></tr></thead>
+      <tbody>${tags.map(t => `<tr>
+        <td class="mono">${esc(t.mac || "")}</td>
+        <td class="mono">${t.ib_uuid ? esc(`${t.ib_uuid.slice(0, 8)}… ${t.ib_major}/${t.ib_minor}`) : ""}</td>
+        <td><input value="${esc(t.label)}" data-tag="${t.id}" data-f="label" size="14" placeholder="e.g. fob #3"></td>
+        <td><select data-tag="${t.id}" data-f="employee_id">${opts(t.employee_id)}</select></td>
+        <td><button class="link danger" data-rmtag="${t.id}">Remove</button></td></tr>`).join("")
+      || '<tr><td colspan="5" class="empty">No devices mapped yet.</td></tr>'}</tbody></table></div>`)}</div>`;
+
+  const loadDisc = async () => {
+    const d = await api("/api/discovered");
+    const left = d.discover_until - d.now;
+    $("disc-state").textContent = left > 0 ? `Scanning, ${Math.ceil(left / 60)} min left` : "Not scanning: only iBeacon devices are listed";
+    $("disc-btn").querySelector("span").textContent = left > 0 ? "Stop scanning" : "Scan for new devices";
+    $("disc-btn").dataset.on = left > 0 ? "1" : "";
+    $("disc-body").innerHTML = d.items.slice(0, 40).map(x => `<tr>
+      <td class="mono">${esc(x.mac)}</td>
+      <td class="mono">${x.ib_uuid ? esc(`${x.ib_uuid.slice(0, 8)}… ${x.ib_major}/${x.ib_minor}`) : ""}</td>
+      <td class="num">${x.rssi} dBm</td><td class="mono">${esc(x.checkpoint_id)}</td>
+      <td class="muted">${ago(x.last_seen)}</td>
+      <td><select data-mac="${esc(x.mac)}">${opts()}</select></td></tr>`).join("")
+      || '<tr><td colspan="6" class="empty">No unmapped devices heard.</td></tr>';
+    document.querySelectorAll("#disc-body select").forEach(s => s.onchange = async () => {
+      if (!s.value) return;
+      try { await api("/api/tags", {method: "POST", body: {employee_id: +s.value, mac: s.dataset.mac}}); toast("Device mapped"); render(); }
+      catch (e) { toast(e.message); }
+    });
+  };
+  $("disc-btn").onclick = async () => { await api(`/api/discover?enable=${$("disc-btn").dataset.on ? "false" : "true"}`, {method: "POST"}); loadDisc(); };
+  $("man-add").onclick = async () => {
+    const body = {employee_id: $("man-emp").value ? +$("man-emp").value : null};
+    if ($("man-mac").value.trim()) body.mac = $("man-mac").value.trim();
+    if ($("man-uuid").value.trim()) { body.ib_uuid = $("man-uuid").value.trim(); body.ib_major = +$("man-major").value; body.ib_minor = +$("man-minor").value; }
+    try { await api("/api/tags", {method: "POST", body}); toast("Device added"); render(); } catch (e) { toast(e.message); }
+  };
+  document.querySelectorAll("[data-tag]").forEach(el => el.onchange = async () => {
+    const v = el.dataset.f === "employee_id" ? (el.value ? +el.value : null) : el.value;
+    try { await api(`/api/tags/${el.dataset.tag}`, {method: "PATCH", body: {[el.dataset.f]: v}}); toast("Saved"); } catch (e) { toast(e.message); }
+  });
+  document.querySelectorAll("[data-rmtag]").forEach(b => b.onclick = async () => {
+    if (!confirm("Remove this device?")) return; await api(`/api/tags/${b.dataset.rmtag}`, {method: "DELETE"}); render();
+  });
+  await loadDisc();
+  timer = setInterval(() => { if (!document.hidden && !document.activeElement?.closest("#disc-body")) loadDisc().catch(() => {}); }, 5000);
+};
+
+// ---------------------------------------------------------------- user movement
+const SAMPLES = [1, 5, 10, 15, 30, 60];
+function rangeFor(kind) {
+  const t = new Date(), s = new Date(t);
+  if (kind === "week") s.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  if (kind === "month") s.setDate(1);
+  if (kind === "30d") s.setDate(t.getDate() - 29);
+  return {start: isoDay(s), end: isoDay(t)};
+}
+
+let mvData = null;
+PAGES.movement = async (q, refreshing = false) => {
+  const emps = await api("/api/employees");
+  const userId = q.get("user") || (emps[0] && emps[0].id);
+  const def = rangeFor("week");
+  const start = q.get("start") || def.start, end = q.get("end") || def.end;
+  const view = q.get("view") || "graph";
+  const sample = +(q.get("sample") || 5);
+  const params = (o) => ({user: userId, start, end, view, sample, ...o});
+
+  const toolbar = `<div class="toolbar">
+      <label class="f">User <select id="m-user">${emps.map(e => `<option value="${e.id}" ${e.id == userId ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select></label>
+      <label class="f">From <input type="date" id="m-start" value="${start}"></label>
+      <label class="f">To <input type="date" id="m-end" value="${end}"></label>
+      <div class="seg" id="m-quick"><button data-r="today">Today</button><button data-r="week">This week</button><button data-r="month">This month</button><button data-r="30d">30 days</button></div>
+      <div class="spacer"></div>
+      <button class="btn" id="m-refresh">${ic("refresh")}Refresh</button></div>`;
+  if (!userId) { $("content").innerHTML = toolbar + card("user", "User Movement", '<div class="empty">No users yet. Add one under Users.</div>'); return; }
+
+  const m = await api(`/api/employees/${userId}/movement?start=${start}&end=${end}`);
+  mvData = m;
+  const e = m.employee, s = m.summary;
+  const macs = e.tags.map(t => t.mac || `iBeacon ${t.ib_major}/${t.ib_minor}`).join(", ") || "not mapped";
+
+  const info = card("user", "User Information", `<div class="card-b">
+      <div class="kv"><span>Name:</span><b>${esc(e.name)}</b></div>
+      <div class="kv"><span>Email:</span><b>${esc(e.email) || '<span class="muted">–</span>'}</b></div>
+      <div class="kv"><span>Department:</span><b>${esc(e.department) || '<span class="muted">–</span>'}</b></div>
+      <div class="kv"><span>Device MAC:</span><b class="mono" style="color:var(--brand-ink)">${esc(macs)}</b></div></div>`);
+  const locs = card("pin", "Locations Visited", `<div class="card-b"><div class="chips">${m.locations.map(l =>
+      `<span class="loc-chip" title="${esc(l.checkpoint_id)} · ${l.visits} visit(s)"><span class="dot"></span>${esc(l.location)} <small>${fmtDur(l.seconds)}</small></span>`).join("")
+      || '<span class="muted">No locations recorded in this period.</span>'}</div></div>`);
+  const summary = card("report", "Attendance Summary", `<div class="card-b"><div class="tiles">
+      ${tile("b-blue", "clock", "Total present hours", fmtDur(s.total_seconds))}
+      ${tile("b-green", "trend", "Daily average", fmtDur(s.daily_average_seconds))}
+      ${tile("b-orange", "cal", "Total days", `${s.present_days} <small class="muted" style="font-size:13px;font-weight:500">of ${s.range_days}</small>`)}
+    </div></div>`);
+
+  const toggle = view === "graph"
+    ? `<button class="btn green" id="m-view">${ic("table")}Table View</button>`
+    : `<button class="btn green" id="m-view">${ic("grid")}Graph View</button>`;
+  const body = view === "graph" ? graphView(m, sample) : tableView(m);
+
+  const keepScroll = document.querySelector(".tl")?.scrollLeft;
+  $("content").innerHTML = `${toolbar}<div class="grid2" style="margin-bottom:18px">${info}${locs}</div>${summary}
+    <div class="toolbar" style="justify-content:flex-end">${view === "graph" ? `<label class="f">Sample Time: <select id="m-sample">${SAMPLES.map(v => `<option value="${v}" ${v === sample ? "selected" : ""}>${v} min</option>`).join("")}</select></label><div class="spacer"></div>` : ""}${toggle}</div>
+    ${body}`;
+
+  $("m-user").onchange = () => go("movement", params({user: $("m-user").value}));
+  $("m-start").onchange = $("m-end").onchange = () => {
+    let a = $("m-start").value, b = $("m-end").value; if (b < a) b = a; go("movement", params({start: a, end: b}));
+  };
+  document.querySelectorAll("#m-quick button").forEach(b => b.onclick = () => go("movement", params(rangeFor(b.dataset.r))));
+  $("m-view").onclick = () => go("movement", params({view: view === "graph" ? "table" : "graph"}));
+  if ($("m-sample")) $("m-sample").onchange = () => go("movement", params({sample: $("m-sample").value}));
+  $("m-refresh").onclick = render;
+  if ($("m-csv")) $("m-csv").onclick = () => downloadRecords(m);
+  const tl = document.querySelector(".tl");
+  if (tl && keepScroll != null && refreshing) tl.scrollLeft = keepScroll;
+  else if (tl && !refreshing) {  // scroll so the latest presence (or now) is in view
+    const last = document.querySelector(".tl-now") || [...document.querySelectorAll(".tl-run")].pop();
+    if (last && last.offsetLeft > tl.clientWidth - 330) tl.scrollLeft = last.offsetLeft - tl.clientWidth / 2;
+  }
+  // Live update while the range includes today.
+  if (!refreshing && end >= isoDay(new Date())) {
+    timer = setInterval(() => {
+      if (document.hidden || document.activeElement?.matches("input, select")) return;
+      PAGES.movement(q, true).catch(() => {});
+    }, 30000);
+  }
+};
+
+function downloadRecords(m) {
+  const rows = [["#", "location", "location_mac", "first_detected", "last_detected", "duration_min", "best_rssi_dbm"]];
+  m.records.forEach((r, i) => rows.push([i + 1, r.location, r.checkpoint_id, fmtDT(r.first), fmtDT(r.last),
+    ((r.last - r.first) / 60).toFixed(1), r.best_rssi]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], {type: "text/csv"}));
+  a.download = `movement_${m.employee.name.replace(/\W+/g, "_")}_${m.start}_${m.end}.csv`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+let resizeT;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => { if (route().page === "movement" && mvData) PAGES.movement(route().q, true).catch(() => {}); }, 250);
+});
+
+function graphView(m, sample) {
+  // Hours shown: 07:00-18:00, widened to include any presence.
+  let h0 = 7, h1 = 18;
+  for (const d of m.days) {
+    const base = dayStart(d.date);
+    for (const s of d.sessions) {
+      h0 = Math.min(h0, Math.floor((s.start - base) / 3600));
+      h1 = Math.max(h1, Math.ceil((s.end - base) / 3600));
+    }
+  }
+  h0 = Math.max(0, h0); h1 = Math.min(24, Math.max(h1, h0 + 1));
+  const perHour = 60 / sample;
+  const narrow = window.innerWidth < 700;
+  const dayW = narrow ? 92 : 170, remW = narrow ? 84 : 120;
+  const cs = getComputedStyle($("content"));
+  const inner = $("content").clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const avail = Math.max(240, inner - dayW - remW - 4);            // 4 = card borders
+  const minHourW = Math.max(narrow ? 56 : 64, perHour * 5);    // keep every sample cell >= 5 px
+  const hourW = Math.max(minHourW, avail / (h1 - h0));           // fit the width when possible
+  const cellW = hourW / perHour, width = Math.floor((h1 - h0) * hourW);
+  const nowTs = Date.now() / 1000, todayIso = isoDay(new Date());
+  const gridBg = `repeating-linear-gradient(90deg, transparent 0 ${cellW - 1}px, var(--cell-line) ${cellW - 1}px ${cellW}px)`;
+
+  let head = "";
+  for (let h = h0; h <= h1; h++) {
+    head += `<div class="hr" style="left:${(h - h0) * hourW}px">${h < h1 ? `<span style="left:${hourW / 2}px">${two(h)}:00</span>` : ""}</div>`;
+  }
+  const rows = m.days.slice().map(d => {
+    const base = dayStart(d.date) + h0 * 3600, slot = sample * 60;
+    const nSlots = (h1 - h0) * perHour;
+    // Snap sessions to sample slots and merge into runs.
+    const on = new Uint8Array(nSlots);
+    for (const s of d.sessions) {
+      const a = Math.max(0, Math.floor((s.start - base) / slot));
+      const b = Math.min(nSlots - 1, Math.floor((Math.max(s.end, s.start + 1) - base - 0.001) / slot));
+      for (let k = a; k <= b; k++) on[k] = 1;
+    }
+    let runs = "";
+    for (let k = 0; k < nSlots;) {
+      if (!on[k]) { k++; continue; }
+      let j = k; while (j < nSlots && on[j]) j++;
+      const t0 = base + k * slot, t1 = base + j * slot;
+      const sess = d.sessions.filter(s => s.start < t1 && s.end > t0);
+      const tip = sess.map(s => `${fmtHM(s.start)}–${s.open ? "now" : fmtHM(s.end)}  ${fmtDur(s.end - s.start)}  @ ${s.location}`).join("\n");
+      const open = sess.some(s => s.open);
+      runs += `<div class="tl-run ${open ? "open" : ""}" style="left:${k * cellW + 1}px;width:${(j - k) * cellW - 2}px" title="${esc(tip)}"></div>`;
+      k = j;
+    }
+    if (d.date === todayIso && nowTs > base && nowTs < base + nSlots * slot) {
+      runs += `<div class="tl-now" style="left:${(nowTs - base) / slot * cellW - 1}px" title="Now ${fmtHM(nowTs)}"></div>`;
+    }
+    const dt = new Date(d.date + "T00:00");
+    const we = dt.getDay() === 0 || dt.getDay() === 6;
+    return `<div class="tl-c tl-day ${we ? "we" : ""}"><b>${dt.toLocaleDateString("en-GB", {weekday: "short"})}</b><small>${narrow ? fmtDMY(d.date).slice(0, 5) : fmtDMY(d.date)}</small></div>
+      <div class="tl-c tl-row" style="background:${gridBg}">${runs}</div>
+      <div class="tl-c tl-rem ${d.total_seconds ? "" : "abs"}">${d.total_seconds ? `✓ ${fmtDur(d.total_seconds)}` : "Absent"}</div>`;
+  }).join("");
+
+  return `<div class="card"><div class="tl"><div class="tl-grid" style="grid-template-columns:${dayW}px ${width}px ${remW}px">
+      <div class="tl-corner">${narrow ? "Time →" : "Time(HH:MM) →"}</div><div class="tl-head">${head}</div><div class="tl-remh">Remarks</div>
+      ${rows}</div></div>
+      <div class="card-b legend" style="border-top:1px solid var(--line);padding:10px 18px">
+        <span><i class="l-on"></i>Present (${sample}-min samples)</span><span><i class="l-open"></i>Still present</span>
+        <span><i class="l-now"></i>Now</span><span>Hover a block for exact times and location.</span></div></div>`;
+}
+
+function tableView(m) {
+  const recs = m.records;
+  const note = recs.length ? "" : `<div class="empty">No raw records in this period. Raw sightings are kept for ${Math.round((Date.now() / 1000 - m.records_since) / 86400)} days.</div>`;
+  const btn = recs.length ? `<button class="btn sm" id="m-csv">${ic("download")}CSV</button>` : "";
+  return card("list", `Raw Movement Records (${recs.length})`, note || `<div class="tbl-wrap tall"><table>
+    <thead><tr><th>#</th><th>Location</th><th>Location MAC</th><th>First Detected</th><th>Last Detected</th><th>Duration</th><th>Best RSSI</th></tr></thead>
+    <tbody>${recs.map((r, i) => `<tr>
+      <td class="num muted">${i + 1}</td>
+      <td>${esc(r.location)} <span class="dot"></span></td>
+      <td class="mono">${esc(r.checkpoint_id)}</td>
+      <td class="num">${fmtDT(r.first)}</td><td class="num">${fmtDT(r.last)}</td>
+      <td class="num">${fmtDur(r.last - r.first)}</td>
+      <td class="num muted">${r.best_rssi} dBm</td></tr>`).join("")}</tbody></table></div>`, btn);
+}
+
+// ---------------------------------------------------------------- attendance (daily report)
+PAGES.attendance = async (q) => {
+  const day = q.get("date") || isoDay(new Date());
+  const rows = await api(`/api/attendance?date=${day}`);
+  const d0 = dayStart(day);
+  const month = rangeFor("month");
+  $("content").innerHTML = `<div class="toolbar">
+      <label class="f">Day <input type="date" id="a-date" value="${day}"></label>
+      <button class="btn sm" id="a-prev">◀</button><button class="btn sm" id="a-next">▶</button>
+      <div class="spacer"></div>
+      <label class="f">Export from <input type="date" id="csv-start" value="${month.start}"></label>
+      <label class="f">to <input type="date" id="csv-end" value="${month.end}"></label>
+      <button class="btn green" id="csv-btn">${ic("download")}Download CSV</button></div>
+    ${card("report", `Daily Attendance: ${fmtDMY(day)}`, `<div class="tbl-wrap"><table>
+      <thead><tr><th>Name</th><th>Department</th><th>First in</th><th>Last out</th><th>Time present</th><th>Day timeline (00–24h)</th><th>Sessions</th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="click" data-id="${r.employee_id}">
+        <td><b>${esc(r.name)}</b>${r.present_now ? ' <span class="pill in">in</span>' : ""}</td>
+        <td class="muted">${esc(r.department)}</td>
+        <td class="num">${fmtHM(r.first_in)}</td>
+        <td class="num">${r.present_now ? "–" : fmtHM(r.last_out)}</td>
+        <td class="num"><b>${fmtDur(r.total_seconds)}</b></td>
+        <td>${r.first_in ? `<div class="bar"><i style="left:${(r.first_in - d0) / 864}%;width:${Math.max(0.5, (r.last_out - r.first_in) / 864)}%"></i></div>` : ""}</td>
+        <td class="num">${r.sessions}</td></tr>`).join("") || '<tr><td colspan="7" class="empty">No users.</td></tr>'}</tbody></table></div>`)}`;
+  const shift = (n) => { const d = new Date(day + "T00:00"); d.setDate(d.getDate() + n); go("attendance", {date: isoDay(d)}); };
+  $("a-date").onchange = () => go("attendance", {date: $("a-date").value});
+  $("a-prev").onclick = () => shift(-1); $("a-next").onclick = () => shift(1);
+  $("csv-btn").onclick = () => location.href = `/api/attendance.csv?start=${$("csv-start").value}&end=${$("csv-end").value}`;
+  document.querySelectorAll("#content tr.click").forEach(tr => tr.onclick = () => go("movement", {user: tr.dataset.id, start: day, end: day}));
+};
+
+render();
+</script>
+</body>
+</html>

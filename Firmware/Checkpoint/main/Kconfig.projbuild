@@ -1,0 +1,78 @@
+menu "Lumen Checkpoint"
+
+    config LUMEN_WIFI_SSID
+        string "Wi-Fi SSID"
+        default "office-wifi"
+
+    config LUMEN_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+
+    config LUMEN_WIFI_2G_ONLY
+        bool "Use 2.4 GHz Wi-Fi only"
+        default y
+        help
+            The ESP32-C5 is dual-band. 2.4 GHz gives better range through walls
+            and avoids 5 GHz DFS channel waits; untick to allow 5 GHz as well.
+
+    config LUMEN_SERVER_URL
+        string "Server URL (no trailing slash)"
+        default "http://192.168.1.10:8000"
+
+    config LUMEN_API_TOKEN
+        string "API token (must match LUMEN_API_TOKEN on the server)"
+        default "change-me"
+
+    config LUMEN_CHECKPOINT_NAME
+        string "Checkpoint name (initial name shown on the website)"
+        default "Checkpoint"
+
+    config LUMEN_REPORT_INTERVAL_MS
+        int "Report interval (ms)"
+        range 1000 60000
+        default 5000
+
+    config LUMEN_MIN_RSSI
+        int "Ignore adverts weaker than (dBm)"
+        range -127 0
+        default -95
+
+    config LUMEN_DISCOVER_MIN_RSSI
+        int "While scanning for new tags, report unknown devices stronger than (dBm)"
+        range -127 0
+        default -65
+        help
+            Keeps phones and laptops across the room out of the "new tags" list:
+            only a tag held close to the checkpoint passes.
+
+    config LUMEN_ADV_ENABLE
+        bool "Advertise as an iBeacon"
+        default y
+
+    if LUMEN_ADV_ENABLE
+        config LUMEN_ADV_UUID
+            string "iBeacon UUID"
+            default "4c756d65-6e00-4173-7365-74547261636b"
+
+        config LUMEN_ADV_MAJOR
+            int "iBeacon major (site)"
+            range 0 65535
+            default 1
+
+        config LUMEN_ADV_MINOR
+            int "iBeacon minor (checkpoint number)"
+            range 0 65535
+            default 1
+
+        config LUMEN_ADV_MEASURED_POWER
+            int "Measured power at 1 m (dBm)"
+            range -100 0
+            default -59
+
+        config LUMEN_ADV_INTERVAL_MS
+            int "Advertising interval (ms)"
+            range 100 10000
+            default 500
+    endif
+
+endmenu

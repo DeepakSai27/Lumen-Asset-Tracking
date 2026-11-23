@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+Server/data/
+
+# ESP-IDF
+Firmware/**/build/
+Firmware/**/sdkconfig
+Firmware/**/sdkconfig.old
+Firmware/**/managed_components/
+Firmware/**/dependencies.lock
+Server/lumen.env
